@@ -10,7 +10,6 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/akmalfairuz/legacy-version/legacyver"
 	"github.com/cooldogedev/spectrum"
 	"github.com/cooldogedev/spectrum/server"
 	"github.com/cooldogedev/spectrum/session"

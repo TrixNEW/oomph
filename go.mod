@@ -48,18 +48,4 @@ require (
 	golang.org/x/tools v0.38.0 // indirect
 )
 
-//replace github.com/sandertv/go-raknet => github.com/tedacmc/tedac-raknet v0.0.4
-
-//replace github.com/sandertv/gophertunnel => ../tedac-gophertunnel
-
-replace github.com/sandertv/go-raknet => ../go-raknet
-
-replace github.com/sandertv/gophertunnel => ../gophertunnel
-
-replace github.com/df-mc/dragonfly => ../dragonfly
-
-replace github.com/cooldogedev/spectrum => ../spectrum
-
-replace github.com/oomph-ac/oconfig => ../oconfig
-
 replace github.com/sandertv/go-raknet => github.com/TedacMC/tedac-raknet v0.0.7-0.20250528200619-d064cf9351d6
