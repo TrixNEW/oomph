@@ -4,7 +4,7 @@ go 1.24.1
 
 require (
 	github.com/chewxy/math32 v1.10.1
-	github.com/cooldogedev/spectrum v0.0.40-0.20250527034552-55ddfe1bba67
+	github.com/cooldogedev/spectrum v0.0.43
 	github.com/df-mc/dragonfly v0.10.9
 	github.com/ethaniccc/float32-cube v0.0.0-20250511224129-7af1f8c4ee12
 	github.com/getsentry/sentry-go v0.27.0
@@ -35,9 +35,9 @@ require (
 	github.com/onsi/gomega v1.36.3 // indirect
 	github.com/quic-go/quic-go v0.55.0 // indirect
 	github.com/rs/cors v1.11.0 // indirect
-	github.com/samber/lo v1.49.1 // indirect
 	github.com/scylladb/go-set v1.0.2 // indirect
 	github.com/segmentio/fasthash v1.0.3 // indirect
+	github.com/stretchr/testify v1.10.0 // indirect
 	golang.org/x/crypto v0.43.0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/net v0.46.0 // indirect
@@ -49,3 +49,11 @@ require (
 )
 
 replace github.com/sandertv/go-raknet => github.com/TedacMC/tedac-raknet v0.0.7-0.20250528200619-d064cf9351d6
+
+replace github.com/sandertv/gophertunnel => ../gophertunnel
+
+replace github.com/df-mc/dragonfly => ../dragonfly
+
+replace github.com/cooldogedev/spectrum => ../spectrum
+
+replace github.com/oomph-ac/oconfig => ../oconfig
