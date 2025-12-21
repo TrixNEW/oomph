@@ -3,7 +3,6 @@ module github.com/oomph-ac/oomph
 go 1.24.1
 
 require (
-	github.com/akmalfairuz/legacy-version v1.5.4
 	github.com/chewxy/math32 v1.10.1
 	github.com/cooldogedev/spectrum v0.0.40-0.20250527034552-55ddfe1bba67
 	github.com/df-mc/dragonfly v0.10.9
@@ -63,4 +62,4 @@ replace github.com/cooldogedev/spectrum => ../spectrum
 
 replace github.com/oomph-ac/oconfig => ../oconfig
 
-replace github.com/akmalfairuz/legacy-version => ../legacy-version
+replace github.com/sandertv/go-raknet => github.com/TedacMC/tedac-raknet v0.0.7-0.20250528200619-d064cf9351d6
