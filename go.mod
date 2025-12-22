@@ -28,6 +28,7 @@ require (
 	github.com/go-echarts/go-echarts/v2 v2.5.1 // indirect
 	github.com/go-jose/go-jose/v4 v4.1.3 // indirect
 	github.com/golang/snappy v1.0.0 // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hjson/hjson-go/v4 v4.4.0 // indirect
 	github.com/klauspost/compress v1.18.1 // indirect
@@ -37,7 +38,6 @@ require (
 	github.com/rs/cors v1.11.0 // indirect
 	github.com/scylladb/go-set v1.0.2 // indirect
 	github.com/segmentio/fasthash v1.0.3 // indirect
-	github.com/stretchr/testify v1.10.0 // indirect
 	golang.org/x/crypto v0.43.0 // indirect
 	golang.org/x/mod v0.29.0 // indirect
 	golang.org/x/net v0.46.0 // indirect
@@ -47,8 +47,6 @@ require (
 	golang.org/x/text v0.30.0 // indirect
 	golang.org/x/tools v0.38.0 // indirect
 )
-
-replace github.com/sandertv/go-raknet => github.com/TedacMC/tedac-raknet v0.0.7-0.20250528200619-d064cf9351d6
 
 replace github.com/sandertv/gophertunnel => ../gophertunnel
 
