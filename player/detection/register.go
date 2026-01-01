@@ -7,11 +7,11 @@ func Register(p *player.Player) {
 	p.RegisterDetection(New_AutoclickerA(p))
 
 	// aim detections
-	p.RegisterDetection(New_AimA(p))
+	//p.RegisterDetection(New_AimA(p))
 
 	// bad packet detections
 	p.RegisterDetection(New_BadPacketA(p))
-	p.RegisterDetection(New_BadPacketB(p))
+	//p.RegisterDetection(New_BadPacketB(p))
 	p.RegisterDetection(New_BadPacketC(p))
 	p.RegisterDetection(New_BadPacketD(p))
 	p.RegisterDetection(New_BadPacketE(p))
@@ -35,5 +35,5 @@ func Register(p *player.Player) {
 	p.RegisterDetection(New_ReachB(p))
 
 	// hitbox detections
-	p.RegisterDetection(New_HitboxA(p))
+	//p.RegisterDetection(New_HitboxA(p))
 }
