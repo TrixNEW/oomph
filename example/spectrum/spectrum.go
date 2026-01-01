@@ -25,6 +25,8 @@ import (
 
 	_ "net/http/pprof"
 
+	_ "github.com/oomph-ac/oomph/utils/collisions"
+
 	"github.com/oomph-ac/oomph/utils"
 )
 
@@ -117,20 +119,8 @@ func main() {
 		AcceptedProtocols: protos,
 		//ResourcePacks:        packs,
 		TexturePacksRequired: false,
-
-		AllowInvalidPackets: false,
-		AllowUnknownPackets: false,
-
-		/* PacketFunc: func(header packet.Header, payload []byte, src, dst net.Addr) {
-			var pk packet.Packet
-			if f, ok := minecraft.DefaultProtocol.Packets(false)[header.PacketID]; ok {
-				pk = f()
-			} else if f, ok := minecraft.DefaultProtocol.Packets(true)[header.PacketID]; ok {
-				pk = f()
-			}
-
-			fmt.Printf("%s -> %s: %T\n", src, dst, pk)
-		}, */
+		AllowInvalidPackets:  false,
+		AllowUnknownPackets:  false,
 	}); err != nil {
 		panic(err)
 	}
