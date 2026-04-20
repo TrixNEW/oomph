@@ -215,6 +215,7 @@ func (p *Player) handleBlockActions(pk *packet.PlayerAuthInput) {
 				}
 				p.blockBreakProgress = 0.0
 				p.blockBreakInProgress = false
+				p.worldUpdater.SetBlockBreakPos(nil)
 				p.World().SetBlock(df_cube.Pos{
 					int(action.BlockPos.X()),
 					int(action.BlockPos.Y()),
@@ -270,20 +271,24 @@ func (p *Player) handleBlockActions(pk *packet.PlayerAuthInput) {
 			case protocol.PlayerActionStopBreak:
 				if p.worldUpdater.BlockBreakPos() == nil {
 					p.Dbg.Notify(DebugModeBlockBreaking, true, "ignored PlayerActionStopBreak (blockBreakPos is nil)")
+					p.blockBreakProgress = 0.0
+					p.blockBreakInProgress = false
 					continue
 				}
 
 				if !p.tryBreakBlock(cube.Face(action.Face)) {
 					continue
 				}
+				breakPos := *p.worldUpdater.BlockBreakPos()
 				p.blockBreakProgress = 0.0
 				p.blockBreakInProgress = false
 				p.World().SetBlock(df_cube.Pos{
-					int(p.worldUpdater.BlockBreakPos().X()),
-					int(p.worldUpdater.BlockBreakPos().Y()),
-					int(p.worldUpdater.BlockBreakPos().Z()),
+					int(breakPos.X()),
+					int(breakPos.Y()),
+					int(breakPos.Z()),
 				}, block.Air{}, nil)
-				p.Dbg.Notify(DebugModeBlockBreaking, true, "(PlayerActionStopBreak) broke block at %v", p.worldUpdater.BlockBreakPos())
+				p.Dbg.Notify(DebugModeBlockBreaking, true, "(PlayerActionStopBreak) broke block at %v", breakPos)
+				p.worldUpdater.SetBlockBreakPos(nil)
 			}
 			newActions = append(newActions, action)
 		}
@@ -372,23 +377,35 @@ func (p *Player) tryBreakBlock(interactFace cube.Face) bool {
 	breakPosPtr := p.worldUpdater.BlockBreakPos()
 	if breakPosPtr == nil {
 		p.Dbg.Notify(DebugModeBlockBreaking, true, "ignored PlayerActionStopBreak (blockBreakPos is nil)")
+		p.blockBreakProgress = 0.0
+		p.blockBreakInProgress = false
 		return false
 	}
 
 	breakPos := *breakPosPtr
-	p.blockBreakProgress += 1.0 / math32.Max(p.expectedBlockBreakTime(breakPos), 0.001)
+	expectedBreakTicks := math32.Max(p.expectedBlockBreakTime(breakPos), 0.001)
+	p.blockBreakProgress += 1.0 / expectedBreakTicks
 	p.Dbg.Notify(DebugModeBlockBreaking, true, "block break progress=%.4f", p.blockBreakProgress)
-	if p.blockBreakProgress <= 0.999 {
+	elapsedBreakTicks := float32(p.ClientTick - p.blockBreakStartTick + 1)
+	if elapsedBreakTicks < 0 {
+		elapsedBreakTicks = 0
+	}
+	latencyCompTicks := float32(p.StackLatency.Milliseconds()) / 100
+	if p.blockBreakProgress <= 0.999 && elapsedBreakTicks+latencyCompTicks < expectedBreakTicks {
 		p.SendBlockUpdates([]protocol.BlockPos{breakPos})
 		p.Popup("<red>Broke block too early!</red>")
 		p.Dbg.Notify(DebugModeBlockBreaking, true, "cancelled break action (blockBreakProgress=%.4f)", p.blockBreakProgress)
 		p.blockBreakProgress = 0.0
+		p.blockBreakInProgress = false
+		p.worldUpdater.SetBlockBreakPos(nil)
 		return false
 	}
 	if !p.blockInteractable(cube.Pos{int(breakPos[0]), int(breakPos[1]), int(breakPos[2])}, interactFace) {
 		p.SendBlockUpdates([]protocol.BlockPos{breakPos})
 		p.Popup("<red>Cannot break this block!</red>")
 		p.blockBreakProgress = 0.0
+		p.blockBreakInProgress = false
+		p.worldUpdater.SetBlockBreakPos(nil)
 		return false
 	}
 	return true
@@ -425,11 +442,22 @@ func (p *Player) expectedBlockBreakTime(pos protocol.BlockPos) float32 {
 	if _, isAir := b.(block.Air); isAir {
 		// Let the player send a break action for air, it won't affect anything in-game.
 		return 0
-	} else if utils.BlockName(b) == "minecraft:web" {
+	}
+	blockName := utils.BlockName(b)
+	if blockName == "minecraft:web" {
 		// Cobwebs are not implemented in Dragonfly, and therefore the break time duration won't be accurate.
 		// Just return 1 and accept when the client does break the cobweb.
 		return 1
-	} else if utils.BlockName(b) == "minecraft:bed" {
+	} else if blockName == "minecraft:bed" {
+		return 1
+	} else if blockName == "minecraft:trip_wire" || blockName == "minecraft:tripwire_hook" {
+		// These custom blocks currently don't expose Dragonfly BreakInfo.
+		// Without this fallback, BreakDuration resolves to MaxInt64 and causes false instabreak mitigation.
+		return 1
+	}
+	if _, breakable := b.(block.Breakable); !breakable {
+		// Some custom blocks do not implement block.Breakable yet. Fall back to a short break time to avoid
+		// impossible-to-break blocks and false "broke too early" resets.
 		return 1
 	}
 
