@@ -31,7 +31,7 @@ func (e *Entity) Rewind(tick int64) (HistoricalPosition, bool) {
 
 	var (
 		best      HistoricalPosition
-		bestDelta int64 = 1_000_000_000_000
+		bestDelta int64
 		found     bool
 	)
 
@@ -52,7 +52,6 @@ func (e *Entity) Rewind(tick int64) (HistoricalPosition, bool) {
 			currentDelta *= -1
 		}
 
-		// Keep old tie behavior: later equal-distance entries override earlier ones.
 		if !found || currentDelta <= bestDelta {
 			best = hp
 			bestDelta = currentDelta
