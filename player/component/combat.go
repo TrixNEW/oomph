@@ -246,14 +246,12 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 	}
 
 	hitValid := false
-	const totalSteps = CombatLerpPositionSteps + 1
-	invSteps := float32(1.0) / float32(CombatLerpPositionSteps)
-	for step := 0; step < totalSteps; step++ {
-		partialTicks := float32(step) * invSteps
-		if step == CombatLerpPositionSteps {
-			// Force the final step to the exact end frame.
-			partialTicks = 1.0
-		}
+
+	stepAmt := 1.0 / float32(CombatLerpPositionSteps)
+
+	for step := 0; step <= CombatLerpPositionSteps; step++ {
+		partialTicks := float32(step) * stepAmt
+
 		lerpedResult := c.lerp(partialTicks)
 		entityBB := c.entityBB.Translate(lerpedResult.entityPos).Grow(0.1)
 		dV := game.DirectionVector(lerpedResult.rotation.Z(), lerpedResult.rotation.X())
@@ -306,6 +304,7 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 				altRaycastDist := lerpedResult.attackPos.Sub(hitResult.Position()).Len()
 				hitValid = hitValid || altRaycastDist <= CombatSurvivalReach
 				c.raycastResults = append(c.raycastResults, altRaycastDist)
+
 				if altRaycastDist < closestRaycastDist {
 					closestRaycastDist = altRaycastDist
 					closestHitResult = hitResult
@@ -313,9 +312,11 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 				}
 				raycastHit = true
 			}
+
 			closestPoint := game.ClosestPointToBBox(lerpedResult.attackPos, altEntityBB)
 			rawDist := lerpedResult.attackPos.Sub(closestPoint).Len()
 			c.rawResults = append(c.rawResults, rawDist)
+
 			if rawDist < closestRawDist {
 				closestRawDist = rawDist
 				closestRawPos = closestPoint
@@ -325,6 +326,7 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 		closestPoint := game.ClosestPointToBBox(lerpedResult.attackPos, entityBB)
 		rawDist := lerpedResult.attackPos.Sub(closestPoint).Len()
 		c.rawResults = append(c.rawResults, rawDist)
+
 		if rawDist < closestRawDist {
 			closestRawDist = rawDist
 			closestRawPos = closestPoint
