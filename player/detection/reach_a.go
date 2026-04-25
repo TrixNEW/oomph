@@ -3,6 +3,7 @@ package detection
 import (
 	"github.com/chewxy/math32"
 	"github.com/oomph-ac/oomph/player"
+	"github.com/oomph-ac/oomph/utils"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
@@ -54,6 +55,9 @@ func (d *ReachA) run(c player.CombatComponent) {
 	}
 	raycasts := c.Raycasts()
 	if len(raycasts) == 0 {
+		return
+	}
+	if utils.PlayerInWater(d.mPlayer.Movement().Pos(), d.mPlayer.World()) {
 		return
 	}
 

@@ -4,6 +4,7 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/oomph-ac/oomph/game"
 	"github.com/oomph-ac/oomph/player"
+	"github.com/oomph-ac/oomph/utils"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
@@ -46,6 +47,9 @@ func (d *HitboxA) Metadata() *player.DetectionMetadata {
 
 func (d *HitboxA) Detect(pk packet.Packet) {
 	if !d.mPlayer.Opts().Combat.EnableClientEntityTracking {
+		return
+	}
+	if utils.PlayerInWater(d.mPlayer.Movement().Pos(), d.mPlayer.World()) {
 		return
 	}
 	switch pk := pk.(type) {

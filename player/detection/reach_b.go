@@ -3,6 +3,7 @@ package detection
 import (
 	"github.com/chewxy/math32"
 	"github.com/oomph-ac/oomph/player"
+	"github.com/oomph-ac/oomph/utils"
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
@@ -49,6 +50,9 @@ func (d *ReachB) Detect(packet.Packet) {}
 
 func (d *ReachB) run(c player.CombatComponent) {
 	if d.mPlayer.Movement().TicksSinceTeleport() <= 20 || d.mPlayer.Movement().InCorrectionCooldown() {
+		return
+	}
+	if utils.PlayerInWater(d.mPlayer.Movement().Pos(), d.mPlayer.World()) {
 		return
 	}
 	minReach := float32(math32.MaxFloat32)

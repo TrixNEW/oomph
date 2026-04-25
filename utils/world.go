@@ -10,6 +10,7 @@ import (
 	df_cube "github.com/df-mc/dragonfly/server/block/cube"
 	"github.com/df-mc/dragonfly/server/world"
 	"github.com/ethaniccc/float32-cube/cube"
+	"github.com/go-gl/mathgl/mgl32"
 	"github.com/oomph-ac/oomph/game"
 	"github.com/oomph-ac/oomph/utils/collisions"
 	"github.com/oomph-ac/oomph/world/blockmodel"
@@ -239,6 +240,21 @@ func scanNearbyBBoxes(aabb cube.BBox, src world.BlockSource, firstOnly bool) ([]
 	}
 
 	return bboxList, false
+}
+
+// PlayerInWater returns true if either the feet or eye-level block at pos is water.
+func PlayerInWater(pos mgl32.Vec3, src world.BlockSource) bool {
+	isWater := func(p df_cube.Pos) bool {
+		liq, ok := src.Block(p).(world.Liquid)
+		if !ok {
+			return false
+		}
+		_, ok = liq.(block.Water)
+		return ok
+	}
+	fx, fz := int(math32.Floor(pos[0])), int(math32.Floor(pos[2]))
+	return isWater(df_cube.Pos{fx, int(math32.Floor(pos[1])), fz}) ||
+		isWater(df_cube.Pos{fx, int(math32.Floor(pos[1] + 1.62)), fz})
 }
 
 // BlockClimbable returns whether the given block is climbable.
