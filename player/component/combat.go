@@ -17,10 +17,17 @@ import (
 )
 
 const (
+	// CombatLerpPositionSteps is the default lerp step count and is used
+	// only as the fallback when LocalCombatOpts.LerpSteps is unset.
 	CombatLerpPositionSteps = 10
 
+	// CombatSurvivalEntitySearchRadius is the default radius for the
+	// misprediction entity search and is used only as the fallback
+	// when LocalCombatOpts.EntitySearchRadius is unset.
 	CombatSurvivalEntitySearchRadius float32 = 6.0
-	CombatSurvivalReach              float32 = 2.9
+	// CombatSurvivalReach is the default maximum reach used only as the
+	// fallback when LocalCombatOpts.MaximumReach is unset.
+	CombatSurvivalReach float32 = 2.9
 )
 
 func init() {
@@ -62,8 +69,11 @@ type AuthoritativeCombatComponent struct {
 }
 
 func NewAuthoritativeCombatComponent(p *player.Player, useClientTracker bool) *AuthoritativeCombatComponent {
-	// Pre-size result slices to avoid reallocations during a typical hit.
-	const sliceCap = (CombatLerpPositionSteps + 1) * 2
+	steps := CombatLerpPositionSteps
+	if cfg := p.Opts(); cfg != nil && cfg.LocalCombat.LerpSteps > 0 {
+		steps = cfg.LocalCombat.LerpSteps
+	}
+	sliceCap := (steps + 1) * 2
 
 	return &AuthoritativeCombatComponent{
 		mPlayer:                p,
@@ -247,13 +257,28 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 
 	hitValid := false
 
-	stepAmt := 1.0 / float32(CombatLerpPositionSteps)
+	local := c.mPlayer.Opts().LocalCombat
+	lerpSteps := local.LerpSteps
+	if lerpSteps <= 0 {
+		lerpSteps = CombatLerpPositionSteps
+	}
+	bboxGrow := local.BBoxExpansion
+	if bboxGrow <= 0 {
+		bboxGrow = 0.1
+	}
+	maxReach := local.MaximumReach
+	if maxReach <= 0 {
+		maxReach = CombatSurvivalReach
+	}
+	raycastReach := maxReach + local.ReachLeniency
 
-	for step := 0; step <= CombatLerpPositionSteps; step++ {
+	stepAmt := 1.0 / float32(lerpSteps)
+
+	for step := 0; step <= lerpSteps; step++ {
 		partialTicks := float32(step) * stepAmt
 
 		lerpedResult := c.lerp(partialTicks)
-		entityBB := c.entityBB.Translate(lerpedResult.entityPos).Grow(0.1)
+		entityBB := c.entityBB.Translate(lerpedResult.entityPos).Grow(bboxGrow)
 		dV := game.DirectionVector(lerpedResult.rotation.Z(), lerpedResult.rotation.X())
 
 		// If the attack position is within the entity's bounding box, the hit is valid and we don't have to do any further checks.
@@ -276,7 +301,7 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 
 		if hitResult, ok := trace.BBoxIntercept(entityBB, lerpedResult.attackPos, lerpedResult.attackPos.Add(dV.Mul(7.0))); ok {
 			raycastDist := lerpedResult.attackPos.Sub(hitResult.Position()).Len()
-			hitValid = hitValid || raycastDist <= CombatSurvivalReach
+			hitValid = hitValid || raycastDist <= raycastReach
 			c.raycastResults = append(c.raycastResults, raycastDist)
 
 			if raycastDist < closestRaycastDist {
@@ -292,7 +317,7 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 		// required if FullAuthoritative is *disabled*, as we want to match the client's own logic as closely as possible.
 		if c.useClientTracker {
 			altEntPos := altEntityStartPos.Add(altEntityPosDelta.Mul(partialTicks))
-			altEntityBB := c.entityBB.Translate(altEntPos).Grow(0.1)
+			altEntityBB := c.entityBB.Translate(altEntPos).Grow(bboxGrow)
 
 			altAngle := math32.Abs(game.AngleToPoint(lerpedResult.attackPos, altEntPos, lerpedResult.rotation)[0])
 			c.angleResults = append(c.angleResults, altAngle)
@@ -302,7 +327,7 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 
 			if hitResult, ok := trace.BBoxIntercept(altEntityBB, lerpedResult.attackPos, lerpedResult.attackPos.Add(dV.Mul(7.0))); ok {
 				altRaycastDist := lerpedResult.attackPos.Sub(hitResult.Position()).Len()
-				hitValid = hitValid || altRaycastDist <= CombatSurvivalReach
+				hitValid = hitValid || altRaycastDist <= raycastReach
 				c.raycastResults = append(c.raycastResults, altRaycastDist)
 
 				if altRaycastDist < closestRaycastDist {
@@ -339,9 +364,10 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 
 	// Only allow the raw distance check to be use for touch players if a raycast is unable to land on the entity. This prevents clients
 	// abusing spoofing their input to gain a slight reach advantage. We also want to make sure we're not allowing the player to hit entities
-	// that are behind them.
-	if !hitValid && c.mPlayer.InputMode == packet.InputModeTouch {
-		hitValid = closestRawDist <= CombatSurvivalReach && closestAngle <= c.mPlayer.Opts().Combat.MaximumAttackAngle
+	// that are behind them. The same fallback is also opted into for non-touch via LocalCombatOpts.RawDistanceFallback to recover hits
+	// that narrowly miss the bbox due to rotation lerp aliasing.
+	if !hitValid && (c.mPlayer.InputMode == packet.InputModeTouch || local.RawDistanceFallback) {
+		hitValid = closestRawDist <= maxReach && closestAngle <= c.mPlayer.Opts().Combat.MaximumAttackAngle
 		if hitValid {
 			lerpedAtClosest.attackPos = c.endAttackPos
 			lerpedAtClosest.entityPos = c.startEntityPos
@@ -353,7 +379,8 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 
 	// If the hit is valid and the player is not on touch mode, check if the closest calculated ray from the player's eye position to the bounding box
 	// of the entity, has any intersecting blocks. If there are blocks that are in the way of the ray then the hit is invalid.
-	if !c.useClientTracker && hitValid && raycastHit && closestRaycastDist > 0 {
+	// BlockedByBlockCancel=false skips this surgically — the most common false-positive source from client/server block state desync.
+	if !c.useClientTracker && hitValid && raycastHit && closestRaycastDist > 0 && local.BlockedByBlockCancel {
 		start, end := lerpedAtClosest.attackPos, closestHitResult.Position()
 	check_blocks_between_ray:
 		for blockPos := range game.BlocksBetween(start, end, 50) {
@@ -384,17 +411,38 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 		closestAngle,
 	)
 
-	// If this is the full-authoritative combat component, and the hit is valid, send the attack packet to the server.
-	if hitValid {
-		c.mPlayer.Dbg.Notify(player.DebugModeCombat, !c.useClientTracker, "<green>hit sent to the server</green> (raycast=%f raw=%f, angle=%f)", closestRaycastDist, closestRawDist, closestAngle)
-		c.mPlayer.Dbg.Notify(player.DebugModeCombat, c.checkMisprediction, "<yellow>client mispredicted air hit, but actually attacked entity</yellow>")
-		if !c.useClientTracker {
+	// When full-authoritative gating is off, forward the hit to the server even if our
+	// validator rejected it. Detections still receive the (possibly invalid) results via
+	// the hooks below — they just no longer prevent the hit from registering.
+	forwardHit := hitValid
+	if !c.useClientTracker && !local.FullAuthoritative && c.attackInput != nil && !c.checkMisprediction {
+		forwardHit = true
+		c.mPlayer.Dbg.Notify(
+			player.DebugModeCombat,
+			!hitValid,
+			"<yellow>full-auth off: forwarding rejected hit</yellow> (raycast=%f, raw=%f, angle=%f)",
+			closestRaycastDist,
+			closestRawDist,
+			closestAngle,
+		)
+	}
+
+	// If this is the full-authoritative combat component, and the hit is valid (or gating is off), send the attack packet to the server.
+	if forwardHit {
+		c.mPlayer.Dbg.Notify(player.DebugModeCombat, !c.useClientTracker && hitValid, "<green>hit sent to the server</green> (raycast=%f raw=%f, angle=%f)", closestRaycastDist, closestRawDist, closestAngle)
+		c.mPlayer.Dbg.Notify(player.DebugModeCombat, c.checkMisprediction && hitValid, "<yellow>client mispredicted air hit, but actually attacked entity</yellow>")
+		if !c.useClientTracker && c.attackInput != nil {
 			c.mPlayer.SendPacketToServer(c.attackInput)
 		}
 	}
 
 	for _, hook := range c.hooks {
 		hook(c)
+	}
+	if !local.FullAuthoritative && !c.useClientTracker {
+		// Detections still consume Calculate's return value to track misprediction outcomes.
+		// With gating off we want the Calculate result to mirror whether the hit was forwarded.
+		return forwardHit
 	}
 	return !c.checkMisprediction || hitValid
 }
@@ -431,7 +479,11 @@ func (c *AuthoritativeCombatComponent) checkForMispredictedEntity() bool {
 		eid            uint64
 	)
 
-	const radiusSq = CombatSurvivalEntitySearchRadius * CombatSurvivalEntitySearchRadius
+	radius := c.mPlayer.Opts().LocalCombat.EntitySearchRadius
+	if radius <= 0 {
+		radius = CombatSurvivalEntitySearchRadius
+	}
+	radiusSq := radius * radius
 	var minDistSq float32 = 1_000_000
 
 	// We subtract the rewind tick by 1 here, because the client has already ticked in this instance (which increases)
