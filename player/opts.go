@@ -78,8 +78,16 @@ type LocalCombatOpts struct {
 }
 
 // DefaultLocalCombatOpts returns oomph's original strict combat tuning as an
-// explicit starting point. The zero value of LocalCombatOpts produces
-// equivalent runtime behaviour via the in-component fallbacks.
+// explicit starting point.
+//
+// The zero value of LocalCombatOpts preserves anti-cheat strictness (all
+// Disable* flags off, RawDistanceFallback off) but is NOT numerically
+// equivalent to DefaultLocalCombatOpts(): several numeric fields treat 0 as a
+// legitimate explicit value rather than a "use default" sentinel — see the
+// per-field docs. In particular, the zero value yields BBoxExpansion=0 (exact
+// bbox, no growth) and EntitySearchRadius=0 (misprediction search disabled).
+// Callers constructing player.Opts{} directly should start from this helper
+// to match in-tree defaults.
 func DefaultLocalCombatOpts() LocalCombatOpts {
 	return LocalCombatOpts{
 		BBoxExpansion:      0.1,
