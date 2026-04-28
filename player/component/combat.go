@@ -16,21 +16,13 @@ import (
 	"github.com/sandertv/gophertunnel/minecraft/protocol/packet"
 )
 
+// Defaults used as fallback when the matching LocalCombatOpts field is unset
+// (see per-field docs for the sentinel each one checks).
 const (
-	// CombatLerpPositionSteps is the default lerp step count and is used
-	// only as the fallback when LocalCombatOpts.LerpSteps is unset (<= 0).
-	CombatLerpPositionSteps = 10
-
-	// CombatSurvivalEntitySearchRadius is the default radius for the
-	// misprediction entity search and is used only as the fallback when
-	// LocalCombatOpts.EntitySearchRadius is unset (negative).
+	CombatLerpPositionSteps                  = 10
 	CombatSurvivalEntitySearchRadius float32 = 6.0
-	// CombatSurvivalReach is the default maximum reach used only as the
-	// fallback when LocalCombatOpts.MaximumReach is unset (<= 0).
-	CombatSurvivalReach float32 = 2.9
-	// CombatDefaultBBoxExpansion is the default bbox grow amount used only
-	// as the fallback when LocalCombatOpts.BBoxExpansion is unset (negative).
-	CombatDefaultBBoxExpansion float32 = 0.1
+	CombatSurvivalReach              float32 = 2.9
+	CombatDefaultBBoxExpansion       float32 = 0.1
 )
 
 func init() {
@@ -70,11 +62,9 @@ type AuthoritativeCombatComponent struct {
 	attacked         bool
 	useClientTracker bool
 
-	// lerpSteps is captured once at construction so that the pre-allocated
-	// result slice caps stay correct. Calculate also reads this field rather
-	// than re-reading LocalCombatOpts.LerpSteps every tick — runtime mutation
-	// of LerpSteps therefore takes effect on the next player session, not
-	// mid-session. This is documented on LocalCombatOpts.LerpSteps.
+	// lerpSteps is captured at construction so result-slice caps stay correct
+	// and Calculate doesn't re-read it each tick. Runtime LerpSteps mutation
+	// therefore takes effect next session (documented on LocalCombatOpts).
 	lerpSteps int
 }
 
@@ -269,11 +259,9 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 	hitValid := false
 
 	local := c.mPlayer.Opts().LocalCombat
-	// LerpSteps is captured at construction (see c.lerpSteps); see field doc.
-	lerpSteps := c.lerpSteps
-	// 0 is a legitimate explicit value for BBoxExpansion ("no growth"); only
-	// fall back when the operator left it negative / unset on a zero-value
-	// LocalCombatOpts.
+	lerpSteps := c.lerpSteps // captured at construction; see field doc
+	// 0 is honoured as "exact bbox" for BBoxExpansion; only negative values
+	// fall back to the default.
 	bboxGrow := local.BBoxExpansion
 	if bboxGrow < 0 {
 		bboxGrow = CombatDefaultBBoxExpansion
@@ -375,13 +363,9 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 		} */
 	}
 
-	// Only allow the raw distance check to be use for touch players if a raycast is unable to land on the entity. This prevents clients
-	// abusing spoofing their input to gain a slight reach advantage. We also want to make sure we're not allowing the player to hit entities
-	// that are behind them.
-	//
-	// LocalCombatOpts.RawDistanceFallback opts non-touch input modes into this same path. NOTE: this is a meaningful weakening of reach
-	// detection — any in-cone, in-reach attack is accepted even when no raycast actually intersects the (expanded) bbox. Operators
-	// turning this on are choosing hit-registration leniency over strict raycast gating.
+	// Touch players (or non-touch with RawDistanceFallback opted in) accept
+	// the closest-point distance when no raycast lands. Gated by reach/angle
+	// to keep behind-the-player and input-spoof advantages off the table.
 	if !hitValid && (c.mPlayer.InputMode == packet.InputModeTouch || local.RawDistanceFallback) {
 		hitValid = closestRawDist <= maxReach && closestAngle <= c.mPlayer.Opts().Combat.MaximumAttackAngle
 		if hitValid {
@@ -393,9 +377,8 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 		}
 	}
 
-	// If the hit is valid and the player is not on touch mode, check if the closest calculated ray from the player's eye position to the bounding box
-	// of the entity, has any intersecting blocks. If there are blocks that are in the way of the ray then the hit is invalid.
-	// DisableBlockOcclusionCheck skips this surgically — it's the most common false-positive source from client/server block state desync.
+	// Reject hits whose ray passes through a solid block. Common false-positive
+	// source on client/server block-state desync, hence the opt-out.
 	if !c.useClientTracker && hitValid && raycastHit && closestRaycastDist > 0 && !local.DisableBlockOcclusionCheck {
 		start, end := lerpedAtClosest.attackPos, closestHitResult.Position()
 	check_blocks_between_ray:
@@ -427,17 +410,10 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 		closestAngle,
 	)
 
-	// When full-authoritative gating is off, forward the hit to the server even if our
-	// validator rejected it. Detections still receive the (possibly invalid) results via
-	// the hooks below — they just no longer prevent the hit from registering.
-	//
-	// Mispredicted air-hits are deliberately excluded from this leniency even
-	// when DisableFullAuthoritative=true. checkForMispredictedEntity() does
-	// synthesise an attackInput for any nearby entity within EntitySearchRadius,
-	// so we technically have a packet to forward — but doing so would let a
-	// killaura that masks attacks as air-swings register hits on every nearby
-	// target whenever the validator rejects them. Misprediction recovery
-	// remains gated on hitValid as a hard anti-cheat floor.
+	// DisableFullAuthoritative forwards rejected hits to the server (hooks still
+	// flag). Mispredictions are deliberately excluded — forwarding their
+	// synthesised packet would let a killaura-as-air-swing register on every
+	// nearby target. Misprediction stays gated on hitValid as the anti-cheat floor.
 	forwardHit := hitValid
 	if !c.useClientTracker && local.DisableFullAuthoritative && !c.checkMisprediction && !hitValid {
 		forwardHit = true
@@ -498,8 +474,7 @@ func (c *AuthoritativeCombatComponent) checkForMispredictedEntity() bool {
 		eid            uint64
 	)
 
-	// 0 is a legitimate explicit value ("don't search"); only fall back when
-	// the operator left it negative on a zero-value LocalCombatOpts.
+	// 0 is honoured as "don't search"; only negative falls back to the default.
 	radius := c.mPlayer.Opts().LocalCombat.EntitySearchRadius
 	if radius < 0 {
 		radius = CombatSurvivalEntitySearchRadius
