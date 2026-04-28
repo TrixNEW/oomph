@@ -429,9 +429,15 @@ func (c *AuthoritativeCombatComponent) Calculate() bool {
 
 	// When full-authoritative gating is off, forward the hit to the server even if our
 	// validator rejected it. Detections still receive the (possibly invalid) results via
-	// the hooks below — they just no longer prevent the hit from registering. Mispredicted
-	// air-hits are excluded: the original swing was sent to the server in air; we have no
-	// attack packet to forward.
+	// the hooks below — they just no longer prevent the hit from registering.
+	//
+	// Mispredicted air-hits are deliberately excluded from this leniency even
+	// when DisableFullAuthoritative=true. checkForMispredictedEntity() does
+	// synthesise an attackInput for any nearby entity within EntitySearchRadius,
+	// so we technically have a packet to forward — but doing so would let a
+	// killaura that masks attacks as air-swings register hits on every nearby
+	// target whenever the validator rejects them. Misprediction recovery
+	// remains gated on hitValid as a hard anti-cheat floor.
 	forwardHit := hitValid
 	if !c.useClientTracker && local.DisableFullAuthoritative && !c.checkMisprediction && !hitValid {
 		forwardHit = true

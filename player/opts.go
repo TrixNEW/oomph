@@ -12,20 +12,30 @@ type Opts struct {
 	// leniency, which is useful when players complain about hits being eaten by
 	// the full server-authoritative combat gating.
 	//
-	// The zero value is safe: it preserves oomph's strict default behaviour.
-	// All `Disable*` flags default to false (strict on); numeric fields fall
-	// back to their original constants when left at zero (or, for fields where
-	// 0 is a legitimate explicit value, when set negative).
+	// The zero value (LocalCombatOpts{}) is NOT equivalent to the in-tree
+	// defaults and is unsafe for production use: BBoxExpansion=0 collapses the
+	// raycast bbox to exact size (stricter — eats more legit hits), and
+	// EntitySearchRadius=0 DISABLES misprediction-entity resolution, which is
+	// a real anti-cheat regression (a killaura masking attacks as air-swings
+	// would not be matched to its target). All Disable* flags and
+	// RawDistanceFallback default to false, so the boolean side of the zero
+	// value is safe; the numeric side is not.
+	//
+	// player.New() initialises this field via DefaultLocalCombatOpts(); any
+	// caller constructing player.Opts{} directly (tests, embedding
+	// integrations) MUST seed LocalCombat from DefaultLocalCombatOpts() and
+	// then tweak. See the per-field docs for which sentinel triggers a
+	// fallback to the original constant on each numeric knob.
 	LocalCombat LocalCombatOpts
 }
 
 // LocalCombatOpts controls the server-authoritative combat component's
 // hit-validation behaviour.
 //
-// The struct is designed so the zero value (LocalCombatOpts{}) preserves
-// oomph's original strict behaviour. DefaultLocalCombatOpts is therefore
-// optional — it exists for clarity and as a starting point operators can
-// tweak from.
+// The zero value is unsafe for production: see Opts.LocalCombat for the full
+// rationale. Construct via DefaultLocalCombatOpts() and tweak from there;
+// per-field docs document which sentinel falls back to the original constant
+// (some fields treat 0 as a legitimate explicit value, not a fallback).
 type LocalCombatOpts struct {
 	// DisableFullAuthoritative removes server-side gating of attack packets.
 	// When true, attacks always forward to the remote server and detections
