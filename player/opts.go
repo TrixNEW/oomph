@@ -11,59 +11,82 @@ type Opts struct {
 	// These knobs let operators trade detection strictness for hit-registration
 	// leniency, which is useful when players complain about hits being eaten by
 	// the full server-authoritative combat gating.
+	//
+	// The zero value is safe: it preserves oomph's strict default behaviour.
+	// All `Disable*` flags default to false (strict on); numeric fields fall
+	// back to their original constants when left at zero (or, for fields where
+	// 0 is a legitimate explicit value, when set negative).
 	LocalCombat LocalCombatOpts
 }
 
 // LocalCombatOpts controls the server-authoritative combat component's
-// hit-validation behaviour. All fields can be tuned at runtime; defaults
-// from DefaultLocalCombatOpts preserve oomph's original behaviour.
+// hit-validation behaviour.
+//
+// The struct is designed so the zero value (LocalCombatOpts{}) preserves
+// oomph's original strict behaviour. DefaultLocalCombatOpts is therefore
+// optional — it exists for clarity and as a starting point operators can
+// tweak from.
 type LocalCombatOpts struct {
-	// FullAuthoritative gates attack packets behind the server-side validator.
-	// When false, attacks always forward to the remote server and detections
+	// DisableFullAuthoritative removes server-side gating of attack packets.
+	// When true, attacks always forward to the remote server and detections
 	// (reach/hitbox/killaura on the client tracker) keep flagging — they just
-	// no longer prevent the hit from registering. Default: true.
-	FullAuthoritative bool
+	// no longer prevent the hit from registering. Default: false (gating on).
+	DisableFullAuthoritative bool
+	// DisableBlockOcclusionCheck disables the wall-occlusion check that
+	// cancels hits whose ray passes through a solid block. Reach/angle gating
+	// still applies. Useful when client/server block-state desync (e.g. a
+	// recently-broken block) eats legit hits. Default: false (check on).
+	DisableBlockOcclusionCheck bool
+	// RawDistanceFallback also accepts the closest-point-on-bbox distance
+	// (not just a successful raycast) for non-touch input modes when no
+	// raycast lands, gated by MaximumReach and MaximumAttackAngle. Touch
+	// always gets this fallback regardless of this flag. Default: false.
+	//
+	// NOTE: this is a meaningful weakening of reach detection — it accepts
+	// any in-cone, in-reach hit even when no raycast intersects the bbox.
+	// It is not just a recovery path for narrow lerp aliasing.
+	RawDistanceFallback bool
+
 	// BBoxExpansion is the amount the targeted entity's bounding box is grown
 	// by when raycasting. Larger values are more lenient toward edge-of-hitbox
-	// hits. Default: 0.1.
+	// hits. Set to a negative value to keep the default of 0.1; 0 is honoured
+	// as "no growth, exact bbox".
 	BBoxExpansion float32
 	// MaximumReach is the maximum allowed distance for a valid survival hit.
-	// Default: 2.9.
+	// Defaults to 2.9 when unset (<= 0). 0 is treated as unset because a
+	// zero reach makes no hits ever land.
 	MaximumReach float32
 	// ReachLeniency is added to MaximumReach for the raycast pass only. It
 	// absorbs ~1 frame of network jitter without weakening the raw-distance
-	// reach detection. Default: 0.
+	// reach detection. Default: 0 (no extra leniency).
 	ReachLeniency float32
 	// LerpSteps is the number of partial-tick samples taken between the
 	// previous and current attack position when validating hits. Higher
-	// values are more accurate at the cost of CPU. Default: 10.
+	// values are more accurate at the cost of CPU. Defaults to 10 when unset
+	// (<= 0). 0 is treated as unset because a zero step count is divide-by-zero.
+	//
+	// NOTE: this value is captured once at construction (player creation) so
+	// that pre-allocated result slices stay correctly sized. Runtime changes
+	// take effect on the next player session.
 	LerpSteps int
 	// EntitySearchRadius is the radius the misprediction search uses when
-	// the client swung in air but may have actually hit something. Default: 6.0.
+	// the client swung in air but may have actually hit something. Set to a
+	// negative value to keep the default of 6.0; 0 is honoured as "do not
+	// search" (all swings in air will be treated as mispredictions resolved
+	// to no entity).
 	EntitySearchRadius float32
-	// RawDistanceFallback accepts hits using the closest point on the entity's
-	// bounding box (not just a successful raycast) for non-touch input modes,
-	// gated by MaximumReach and MaximumAttackAngle. Touch always gets this
-	// fallback. Default: false.
-	RawDistanceFallback bool
-	// BlockedByBlockCancel cancels hits whose ray passes through a solid
-	// block. Set false to suppress this surgically — reach/angle gating
-	// still applies. Useful when client/server block-state desync (e.g. a
-	// recently-broken block) eats legit hits. Default: true.
-	BlockedByBlockCancel bool
 }
 
-// DefaultLocalCombatOpts returns oomph's original combat tuning.
+// DefaultLocalCombatOpts returns oomph's original strict combat tuning as an
+// explicit starting point. The zero value of LocalCombatOpts produces
+// equivalent runtime behaviour via the in-component fallbacks.
 func DefaultLocalCombatOpts() LocalCombatOpts {
 	return LocalCombatOpts{
-		FullAuthoritative:    true,
-		BBoxExpansion:        0.1,
-		MaximumReach:         2.9,
-		ReachLeniency:        0.0,
-		LerpSteps:            10,
-		EntitySearchRadius:   6.0,
-		RawDistanceFallback:  false,
-		BlockedByBlockCancel: true,
+		BBoxExpansion:      0.1,
+		MaximumReach:       2.9,
+		ReachLeniency:      0.0,
+		LerpSteps:          10,
+		EntitySearchRadius: 6.0,
 	}
 }
 
